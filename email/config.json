@@ -4,12 +4,12 @@
             "database_user":"root",
             "database_pass":"",
             "database_name":"project",
-            "email_from":"pruebaequiz1.1@gmail.com",
+            "email_from":"testingequiz1.1@gmail.com",
             "email_from_name":"Jorge Zavala",
             "email_smtp_host":"smtp.gmail.com",
             "email_smtp_port":"465",
-            "email_smtp_user":"pruebaequiz1.1@gmail.com",
-            "email_smtp_pass":"prueba1234",
+            "email_smtp_user":"testingequiz1.1@gmail.com",
+            "email_smtp_pass":"Jorge1234",
             "email_batch_limit":"10"
     }
 ]

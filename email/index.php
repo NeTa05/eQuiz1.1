@@ -1,20 +1,20 @@
 <?php   
-    /*here I include the file that has the class Db*/
+    //here I include the file that has the class Db
     require_once 'Db.php';
-    /*here I include the config.php*/
+    //here I include the config.php
     require_once 'Conf.php';
-    /* include the classes to send the email */
+    // include the classes to send the email 
     include_once("class.phpmailer.php");
     include_once("class.smtp.php");
     
-    $string = file_get_contents("c:\\Json\\config.json");;//get the file
-    //$string = file_get_contents($argv[1]);//get the file
-    $dataJson = json_decode($string, true);//get the variables of config.json
-    $host=$dataJson[0]["database_host"];//get host
-    $user=$dataJson[0]["database_user"];//get user
-    $password=$dataJson[0]["database_pass"];//get password
-    $db=$dataJson[0]["database_name"];//get db
-    $size=(int)$dataJson[0]["email_batch_limit"];//get db
+    $string = file_get_contents("config.json");;//getting the file
+    //$string = file_get_contents($argv[1]);//getting the file
+    $dataJson = json_decode($string, true);//getting the variables of config.json
+    $host=$dataJson[0]["database_host"];//getting host
+    $user=$dataJson[0]["database_user"];//getting user
+    $password=$dataJson[0]["database_pass"];//getting password
+    $db=$dataJson[0]["database_name"];//getting db
+    $size=(int)$dataJson[0]["email_batch_limit"];//getting db
     
     //checking all the variables
     if(!empty($host) && !empty($user) && !empty($db))
@@ -32,6 +32,10 @@
     
     /*create the instance for connecting database*/
     $bd= Db::getInstance();
+    set_time_limit(0);//no time limit is setting to execute this script 
+    $ready=true;//to know if I all test was sent
+    
+    
     
     //TEST
     $sql='select * from test where application_date < NOW() and status=1';//select of tests before now and with status=1
@@ -55,12 +59,13 @@
         $courseId=$groupInfoTable['course_id'];//column course_id from groupinfo
         $professorId=$groupInfoTable['professor_id'];//column professor_id from groupinfo
         //PROFESSOR
-        $sql='select first_name, last_name FROM professor where id="'.$professorId.'" ';//select from professor for getting first_name and last_name
+        $sql='select first_name, last_name,email FROM professor where id="'.$professorId.'" ';//select from professor for getting first_name last_name and email
         $selectProfessor=$bd->ejecutar($sql);//to execute select
         $professorTable=$bd->obtener_fila($selectProfessor,0);//getting rows
         //ROWS PROFESSOR
         $firstNameProfessor=$professorTable['first_name'];//column first_name from professor
         $lastNameProfessor=$professorTable['last_name'];//column last_name from professor
+        $emailProfessor=$professorTable['email'];//column email from professor
         //COURSE
         $sql='select name FROM course where id="'.$courseId.'" ';//select from course with the value of one id
         $selectCourse=$bd->ejecutar($sql);//to execute select
@@ -126,7 +131,22 @@
 
                             '</p><br> <a href="'.$link.'" >Link</a> <br><br>'.$foot.' </body>
                             </html>';
-
+                    
+                   
+                    $emailFromName=$dataJson[0]["email_from_name"];//getting the email_from_name, from json
+                    $emailFrom=$dataJson[0]["email_from"];//getting the email_from, from json
+                    
+                     //checking if the json have the email_from_name
+                    if(empty($emailFromName)|| trim($emailFromName)=="")
+                    {
+                        $emailFromName=$firstNameProfessor." ".$lastNameProfessor;//getting the name of professor
+                    }
+                     //checking if the json have the email_from
+                    if(empty($emailFrom)||trim($emailFrom)=="")
+                    {
+                        $emailFrom=$emailProfessor;//getting the email of professor
+                    }
+                    
                     //echo $body;
                     $mail = new PHPMailer(); /*create the instance to send the email*/
                     $mail->IsHTML(True);//the mail is html
@@ -137,29 +157,33 @@
                     $mail->Port = $dataJson[0]["email_smtp_port"];//getting the port of smtp
                     $mail->Username= $dataJson[0]["email_smtp_user"]; //getting the email
                     $mail->Password = $dataJson[0]["email_smtp_pass"]; //getting the password of the email
-                    $mail->From = $dataJson[0]["email_from"]; // getting email from
-                    $mail->FromName=$dataJson[0]["email_from_name"];// getting the email_from_name
+                    $mail->From = $emailFrom; // getting email from
+                    $mail->FromName=$emailFromName;// getting the email_from_name
                     $mail->AddAddress($to);//adding the email to send
-                    $mail->Subject = "Quiz ".$nameCourse; // joing the word "quiz" with the name of course
+                    $mail->Subject = "Quiz ".$nameCourse."-".$description; // joing the word "quiz" with the name of course-description test
                     $mail->WordWrap = 50; //number of rows in the email
                     $mail->MsgHTML($html); //sending the html
                     
                     //the email was sent
                     if ($mail->Send())
                     { 
-                            $answer = "The email was sent";
-                            $countSent++;//countSent + 1()
+                        $answer = "The email was sent";
+                        $countSent++;//countSent + 1
+                        //inserting in notification_sent, to not send the test again 
+                        $sql='INSERT INTO notification_sent (`student_id`, `test_id`) VALUES ('.$idStudent.', '.$idTest.') ';
+                        $bd->ejecutar($sql);//to execute sql*/
+                        $ready=false;//to if the script sent email or not
                     }
                     //the email wasn´t sent
                     else 
                     {
-                            $answer = "Fail ";
-                            $answer .= " Error: ".$mail->ErrorInfo;
+                        $answer = "Fail ";
+                        $answer .= " Error: ".$mail->ErrorInfo;
                     }
                     //if the countSent is like size 
                     if($countSent==$size)
                     {
-                        sleep(3);//sleep 3 second
+                        sleep(3);//sleep 3 second every 10 sent
                         $countSent=0;//setting the countSend in 0
                         
                     }//end if
@@ -171,5 +195,13 @@
         $sql='UPDATE test SET status=0 WHERE id="'.$idTest.'" ';
         $bd->ejecutar($sql);//to execute sql
     }//end while ($testTable=$bd->obtener_fila($selectTest,0))
-    
+    //all the test were sent 
+    if($ready)//when the script didn´t send the email
+    {
+        echo "No have tests to send ";
+    }
+    else//when the script sends the email
+    {
+        echo "Ready";
+    }
 ?> 
